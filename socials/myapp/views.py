@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from .serializers import UserSerializer
-from .models import User,UserFollowing,Post,Like
+from .models import User,UserFollowing,Post,Like,Comment
 from rest_framework import generics
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
@@ -24,6 +24,7 @@ from django.conf import settings
 from rest_framework.exceptions import AuthenticationFailed
 import json
 from django.views.decorators.http import require_http_methods
+from datetime import datetime
 # Create your views here.
 def welcome(self):
     data={"data":"hello world"}
@@ -274,14 +275,18 @@ def post_detail(request, id):
     
     elif request.method == 'GET':
         # Get the post, checking that it exists
+        print('getting details')
         try:
             post = get_object_or_404(Post, id=id)
             # Get the number of likes and comments for the post
-            num_likes = 0 #post.likes.count()
-            num_comments = 0 #post.comments.count()
-            print(post.name)
-            print(post.caption)
-            print(post.user)
+            
+            num_likes = post.likes_post.count()
+            num_comments = post.comment_set.count()
+            print(num_likes)
+            print(num_comments)
+            # print(post.caption)
+            # print(post.user)
+            
             # Return the post data along with the number of likes and comments
             return JsonResponse({'post':post.name , 'num_likes': num_likes, 'num_comments': num_comments})
         except:
@@ -355,6 +360,87 @@ def unlike_post(request, id):
 
     # Return success response
     return JsonResponse({'message': 'Post unliked successfully.'})
+
+@csrf_exempt
+@require_POST
+def add_comment(request, id):
+    # Get the authenticated user
+    user = request.user
+    user = request.user
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        print(decoded_token)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({"Error":"Token Expired"})
+    except jwt.InvalidTokenError:
+        return JsonResponse({"Error":"Token Invalid"})
+    
+    try:
+        user=get_object_or_404(User, email=decoded_token['email'])
+        post = get_object_or_404(Post, id=id)
+    except:
+        return JsonResponse({'error':'some error occured'})
+    
+    # Get the post to comment on
+    
+
+   
+    
+    # Get the text of the comment from the request data
+    req_data =json.loads(request.body)
+    text=req_data['comment']
+    if not text:
+        return JsonResponse({'error': 'Comment text missing.'}, status=400)
+
+    # Create the new comment object
+    try:
+        comment = Comment.objects.create(user=user, post=post, text=text, time_created=datetime.now())
+        print(comment)
+    except:
+        return JsonResponse({'message':'some error occurred'})
+    # Return the new comment ID
+    print("Comment Added Successfully")
+    return JsonResponse({'comment_id': comment.id})
+
+
+def all_posts(request):
+    user = request.user
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        print(decoded_token)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({"Error":"Token Expired"})
+    except jwt.InvalidTokenError:
+        return JsonResponse({"Error":"Token Invalid"})
+    
+    try:
+        user=get_object_or_404(User, email=decoded_token['email'])
+    except:
+        return JsonResponse({'error':'some error occured'})
+    try:
+        posts = Post.objects.filter(user=user).order_by('-time_created')
+    except:
+        return JsonResponse({'Error':'Some Error Occurred'})
+    post_list = []
+    for post in posts:
+        comments = Comment.objects.filter(post=post)
+        comment_list = []
+        for comment in comments:
+            comment_list.append({'id': comment.id, 'text': comment.text, 'time_created': comment.time_created})
+        post_list.append({'id': post.id, 'title': post.name, 'desc': post.caption, 'created_at': post.time_created, 'comments': comment_list, 'likes': post.likes.count()})
+    return JsonResponse(post_list, safe=False)
+
+
 # @api_view(['POST'])
 # def authenticate_user(request):
 #     email = request.data.get('email')
