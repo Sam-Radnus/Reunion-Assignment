@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from .serializers import UserSerializer
-from .models import User,UserFollowing,Post
+from .models import User,UserFollowing,Post,Like
 from rest_framework import generics
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
@@ -247,7 +247,6 @@ def delete_post(request, id):
 @require_http_methods(['DELETE', 'GET'])
 def post_detail(request, id):
     
-    
     if request.method == 'DELETE':
         # Get the post to delete, checking that it belongs to the authenticated user
         auth_header = request.META.get('HTTP_AUTHORIZATION', None)
@@ -291,6 +290,71 @@ def post_detail(request, id):
         return JsonResponse({'message':'method not allowed'})
 
 
+@require_POST
+@csrf_exempt
+def like_post(request, id):
+    # Get the authenticated user
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        print(decoded_token)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({"Error":"Token Expired"})
+    except jwt.InvalidTokenError:
+        return JsonResponse({"Error":"Token Invalid"})
+    
+    user=get_object_or_404(User, email=decoded_token['email'])
+
+    # Get the post to like
+    post = get_object_or_404(Post, id=id)
+
+    # Create a new Like object for the post and user
+    like, created = Like.objects.get_or_create(user=user, post=post)
+
+    # If the Like object was just created, increment the post's like count
+    if created:
+       post.likes.add(user)
+    else:
+       return JsonResponse({'error': 'Post Already liked. or Some other Error'})
+
+    # Return success response
+    return JsonResponse({'message': 'Post liked successfully.'})
+
+@require_POST
+@csrf_exempt
+def unlike_post(request, id):
+    # Get the authenticated user
+    user = request.user
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        print(decoded_token)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({"Error":"Token Expired"})
+    except jwt.InvalidTokenError:
+        return JsonResponse({"Error":"Token Invalid"})
+    
+    user=get_object_or_404(User, email=decoded_token['email'])
+    # Get the Like object for the user and post
+    try:
+        like = get_object_or_404(Like, user=user, post__id=id)
+        post = get_object_or_404(Post, id=id)
+        # Decrement the post's like count and delete the Like object
+        like.delete()
+        post.likes.remove(user)
+    except:
+        return JsonResponse({'error': 'Some Error Occurred.'})
+
+    # Return success response
+    return JsonResponse({'message': 'Post unliked successfully.'})
 # @api_view(['POST'])
 # def authenticate_user(request):
 #     email = request.data.get('email')

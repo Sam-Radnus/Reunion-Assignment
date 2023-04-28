@@ -61,6 +61,12 @@ class Like(models.Model):
 
     def __str__(self):
         return self.user.username
+    
+    def liked_by_users(self):
+        return self.likes.all()
+    
+    def total_likes(self):
+        return self.likes.count()
 
 
 class Comment(models.Model):
