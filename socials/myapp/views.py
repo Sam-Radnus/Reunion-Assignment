@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from .serializers import UserSerializer
-from .models import User,UserFollowing
+from .models import User,UserFollowing,Post
 from rest_framework import generics
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
@@ -22,7 +22,7 @@ from django.views.decorators.csrf import csrf_exempt
 import jwt
 from django.conf import settings
 from rest_framework.exceptions import AuthenticationFailed
-
+import json
 # Create your views here.
 def welcome(self):
     data={"data":"hello world"}
@@ -162,8 +162,79 @@ def unfollow_user(request, id):
     return JsonResponse({'success': 'You have unfollowed this user.'}, status=200)
 
 
+@require_POST
+@csrf_exempt
+def create_post(request):
+    # Get the user object
+    
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    print(auth_header)
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        scopes = decoded_token.get('scope', '').split()
+        
+        print(decoded_token)
+        print(scopes)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({"Error":"Token Expired"})
+    except jwt.InvalidTokenError:
+        return JsonResponse({"Error":"Token Invalid"})
+    
+    user=get_object_or_404(User, email=decoded_token['email'])
+    print(user)
+    # Get the JSON data from the request body
+    data = json.loads(request.body)
 
+    # Create the new post object
+    post = Post(name=data['name'], caption=data['caption'],user=user)
+    post.save()
 
+    # Return success response with the created post object
+    response_data = {
+        'Post-ID': post.id,
+        'Title': post.name,
+        'Description': post.caption,
+        'user': post.user.username,
+        'Created Time(UTC)': post.time_created.strftime('%Y-%m-%d %H:%M:%S'),
+        'likes': post.total_likes(),
+    }
+    return JsonResponse(response_data, status=201)
+
+@csrf_exempt
+@api_view(['POST'])
+def delete_post(request, id):
+    # Get the authenticated user
+    return JsonResponse({'hello':'world'})
+    # print(1)
+    # auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    # if not auth_header:
+    #     return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    
+    # try:
+    #     token = auth_header.split(' ')[1]
+    #     decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+    #     print(decoded_token)
+    # except jwt.ExpiredSignatureError:
+    #     return JsonResponse({"Error":"Token Expired"})
+    # except jwt.InvalidTokenError:
+    #     return JsonResponse({"Error":"Token Invalid"})
+    
+    # user=get_object_or_404(User, email=decoded_token['email'])
+    
+    # # Get the post to delete, checking that it belongs to the authenticated user
+    # try:
+    #     post = get_object_or_404(Post, id=id, user=user)
+    # except:
+    #     return JsonResponse({'Error':'Some Error Occurred'})
+    # # Delete the post
+    # post.delete()
+    
+    # # Return success response
+    # return JsonResponse({'message': 'Post deleted successfully.'})
 
 
 
