@@ -23,6 +23,7 @@ import jwt
 from django.conf import settings
 from rest_framework.exceptions import AuthenticationFailed
 import json
+from django.views.decorators.http import require_http_methods
 # Create your views here.
 def welcome(self):
     data={"data":"hello world"}
@@ -204,43 +205,90 @@ def create_post(request):
     }
     return JsonResponse(response_data, status=201)
 
+@require_http_methods(['DELETE'])
 @csrf_exempt
-@api_view(['POST'])
 def delete_post(request, id):
     # Get the authenticated user
-    return JsonResponse({'hello':'world'})
-    # print(1)
-    # auth_header = request.META.get('HTTP_AUTHORIZATION', None)
-    # if not auth_header:
-    #     return JsonResponse({'error': 'Authorization header missing.'}, status=401)
     
-    # try:
-    #     token = auth_header.split(' ')[1]
-    #     decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-    #     print(decoded_token)
-    # except jwt.ExpiredSignatureError:
-    #     return JsonResponse({"Error":"Token Expired"})
-    # except jwt.InvalidTokenError:
-    #     return JsonResponse({"Error":"Token Invalid"})
+    print(1)
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
     
-    # user=get_object_or_404(User, email=decoded_token['email'])
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        print(decoded_token)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({"Error":"Token Expired"})
+    except jwt.InvalidTokenError:
+        return JsonResponse({"Error":"Token Invalid"})
+    
+    user=get_object_or_404(User, email=decoded_token['email'])
     
     # # Get the post to delete, checking that it belongs to the authenticated user
-    # try:
-    #     post = get_object_or_404(Post, id=id, user=user)
-    # except:
-    #     return JsonResponse({'Error':'Some Error Occurred'})
-    # # Delete the post
-    # post.delete()
+    try:
+        print(id)
+        print(user)
+
+        post = get_object_or_404(Post, id=id, user=user)
+    except:
+        return JsonResponse({'Error':'Some Error Occurred'})
+    # Delete the post
+    post.delete()
     
     # # Return success response
-    # return JsonResponse({'message': 'Post deleted successfully.'})
+    return JsonResponse({'message': 'Post deleted successfully.'})
 
 
 
 
-
-
+@csrf_exempt
+@require_http_methods(['DELETE', 'GET'])
+def post_detail(request, id):
+    
+    
+    if request.method == 'DELETE':
+        # Get the post to delete, checking that it belongs to the authenticated user
+        auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+        if not auth_header:
+            return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    
+        try:
+            token = auth_header.split(' ')[1]
+            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            print(decoded_token)
+        except jwt.ExpiredSignatureError:
+            return JsonResponse({"Error":"Token Expired"})
+        except jwt.InvalidTokenError:
+            return JsonResponse({"Error":"Token Invalid"})
+    
+        user=get_object_or_404(User, email=decoded_token['email'])
+        try:
+            post = get_object_or_404(Post, id=id, user=user)
+            # Delete the post
+            post.delete()
+            # Return success response
+            return JsonResponse({'message': 'Post deleted successfully.'})
+        except:
+            return JsonResponse({'message': 'Some Error Occurred.'})
+    
+    elif request.method == 'GET':
+        # Get the post, checking that it exists
+        try:
+            post = get_object_or_404(Post, id=id)
+            # Get the number of likes and comments for the post
+            num_likes = 0 #post.likes.count()
+            num_comments = 0 #post.comments.count()
+            print(post.name)
+            print(post.caption)
+            print(post.user)
+            # Return the post data along with the number of likes and comments
+            return JsonResponse({'post':post.name , 'num_likes': num_likes, 'num_comments': num_comments})
+        except:
+            return JsonResponse({'error':'some error occurred'})
+    else :
+        return JsonResponse({'message':'method not allowed'})
 
 
 # @api_view(['POST'])
