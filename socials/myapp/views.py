@@ -162,37 +162,41 @@ def unfollow_user(request, id):
 
     # Return success response
     return JsonResponse({'success': 'You have unfollowed this user.'}, status=200)
-
+   
 
 @require_POST
 @csrf_exempt
 def create_post(request):
-    # Get the user object
-    
-    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
-    
-    if not auth_header:
-        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
-    print(auth_header)
-    try:
-        token = auth_header.split(' ')[1]
-        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-        scopes = decoded_token.get('scope', '').split()
-        
-        print(decoded_token)
-        print(scopes)
-    except jwt.ExpiredSignatureError:
-        return JsonResponse({"Error":"Token Expired"})
-    except jwt.InvalidTokenError:
-        return JsonResponse({"Error":"Token Invalid"})
-    
-    user=get_object_or_404(User, email=decoded_token['email'])
-    print(user)
     # Get the JSON data from the request body
     data = json.loads(request.body)
 
+    # Validate title and caption fields
+    name = data.get('name')
+    if name is None:
+        return JsonResponse({'error': 'Title (name) is missing.'}, status=400)
+    caption = data.get('caption')
+    if caption is None:
+        return JsonResponse({'error': 'Caption is missing.'}, status=400)
+
+    # Get the user object
+    auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+    if not auth_header:
+        return JsonResponse({'error': 'Authorization header missing.'}, status=401)
+    try:
+        token = auth_header.split(' ')[1]
+        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        email = decoded_token.get('email', '')
+        password = decoded_token.get('password', '')
+        user = authenticate(request, username=email, password=password)
+        if user is None:
+            return JsonResponse({'error': 'Invalid authentication token.'}, status=401)
+    except jwt.ExpiredSignatureError:
+        return JsonResponse({'error': 'Authentication token expired.'}, status=401)
+    except jwt.InvalidTokenError:
+        return JsonResponse({'error': 'Invalid authentication token.'}, status=401)
+
     # Create the new post object
-    post = Post(name=data['name'], caption=data['caption'],user=user)
+    post = Post(name=name, caption=caption, user=user)
     post.save()
 
     # Return success response with the created post object
@@ -205,6 +209,7 @@ def create_post(request):
         'likes': post.total_likes(),
     }
     return JsonResponse(response_data, status=201)
+
 
 @require_http_methods(['DELETE'])
 @csrf_exempt
