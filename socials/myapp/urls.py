@@ -12,5 +12,5 @@ urlpatterns = [
     path('like/<int:id>',like_post),
     path('unlike/<int:id>',unlike_post),
     path('comment/<int:id>',add_comment),
-    path('all_posts',all_posts)
+    path('all_posts',all_posts,name="all_posts")
 ]
