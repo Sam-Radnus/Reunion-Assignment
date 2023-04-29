@@ -1,12 +1,3 @@
-# syntax=docker/dockerfile:1
-
-FROM postgres:latest
-
-ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=sambath123
-ENV POSTGRES_DB=myapp_db
-
-COPY init.sql /docker-entrypoint-initdb.d/
 
 FROM python:3.10.6-slim-buster
 
